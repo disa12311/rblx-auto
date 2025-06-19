@@ -9,14 +9,21 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 
 # --- CẤU HÌNH ---
-DISCORD_TOKEN = "MTM4NTE4MTI1ODI2NjU3NDk5OQ.GaFz0u.UAqcmPE9kZFU_slizFPZlu7fg2udQmhwZBs8AU"
-WEBSITE_URL = "rblx.earth/?referredBy=8404348847"
-# Không cần PREFIX nữa vì chúng ta dùng slash command
+import os # Import thêm thư viện os
+# Lấy token từ biến môi trường của Railway thay vì ghi thẳng vào code
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN") 
+WEBSITE_URL = "https://rblx.earth/"
 
-# --- KHỞI TẠO SELENIUM ---
-service = Service(executable_path='./chromedriver.exe')
+# --- KHỞI TẠO SELENIUM (CẬP NHẬT CHO SERVER) ---
 options = webdriver.ChromeOptions()
-driver = webdriver.Chrome(service=service, options=options)
+options.add_argument("--headless")  # BẮT BUỘC: Chạy ở chế độ không giao diện
+options.add_argument("--no-sandbox") # BẮT BUỘC: Cần thiết để chạy Chrome trong môi trường container
+options.add_argument("--disable-dev-shm-usage") # BẮT BUỘC: Tránh lỗi tài nguyên
+options.add_argument("--disable-gpu") # Tùy chọn: Vô hiệu hóa GPU
+options.add_argument("window-size=1920,1080") # Tùy chọn: Đặt kích thước cửa sổ ảo
+
+# Khi dùng Docker, chúng ta không cần chỉ định đường dẫn tới chromedriver nữa
+driver = webdriver.Chrome(options=options)
 
 # --- KHỞI TẠO BOT DISCORD ---
 intents = discord.Intents.default()
@@ -107,4 +114,7 @@ async def stop_browser(ctx: discord.ApplicationContext):
         await ctx.edit(content=f"❌ Lỗi khi đóng trình duyệt: `{e}`")
 
 # --- CHẠY BOT ---
-bot.run(DISCORD_TOKEN)
+if DISCORD_TOKEN:
+    bot.run(DISCORD_TOKEN)
+else:
+    print("Lỗi: Không tìm thấy DISCORD_TOKEN trong biến môi trường.")
