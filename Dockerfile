@@ -36,23 +36,19 @@ RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add
     && rm -rf /var/lib/apt/lists/*
 
 # Tải và cài đặt ChromeDriver
-# Cách an toàn hơn: dùng một phiên bản ChromeDriver cố định hoặc đảm bảo lệnh grep hoạt động đúng
-# Cách 1: Tải ChromeDriver bằng phiên bản cụ thể (khuyến nghị cho sự ổn định)
-# Bạn nên kiểm tra phiên bản ChromeDriver tương thích với Google Chrome Stable đã cài ở trên.
-# Ví dụ: nếu google-chrome-stable là 126.x.x.x, bạn có thể tìm ChromeDriver 126.x.x.x
-# Truy cập https://googlechromelabs.github.io/chrome-for-testing/ để tìm phiên bản mới nhất
-ARG CHROMEDRIVER_VERSION="126.0.6478.126" # Cập nhật số phiên bản này thường xuyên!
+# Tìm phiên bản ChromeDriver tương thích với Chrome 137.0.7151.119
+# Bạn cần truy cập: https://googlechromelabs.github.io/chrome-for-testing/
+# và tìm phiên bản MỚI NHẤT của ChromeDriver cho Chrome version 137.*
+# Ví dụ: nếu bạn thấy "137.0.7151.119", hãy sử dụng số này.
+# Hoặc, bạn có thể thử một regex linh hoạt hơn hoặc đơn giản là để nó tự động
+# nếu bạn đã cài đặt google-chrome-stable
+# Hoặc tốt nhất là dùng một biến môi trường để truyền vào khi build Docker
+ARG CHROMEDRIVER_VERSION="137.0.7151.119" # CẬP NHẬT VÀ KIỂM TRA PHIÊN BẢN NÀY THƯỜNG XUYÊN!
+
 RUN wget -q --continue -P /tmp/ https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip \
     && unzip /tmp/chromedriver-linux64.zip -d /usr/local/bin/ \
     && mv /usr/local/bin/chromedriver-linux64/chromedriver /usr/local/bin/ \
     && rm -r /tmp/chromedriver-linux64.zip /usr/local/bin/chromedriver-linux64
-
-# Hoặc Cách 2: Giữ lệnh tải tự động, nhưng điều chỉnh đường dẫn sau khi giải nén
-# RUN LATEST_CHROMEDRIVER_VERSION=$(wget -q -O - "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | grep -oP '"linux64":\[{"platform":"linux64","url":"\K[^"]+') \
-#     && wget -q --continue -P /tmp/ https://storage.googleapis.com/chrome-for-testing-public/${LATEST_CHROMEDRIVER_VERSION} \
-#     && unzip /tmp/chromedriver-linux64.zip -d /usr/local/bin/ \
-#     && mv /usr/local/bin/chromedriver-linux64/chromedriver /usr/local/bin/ \
-#     && rm -r /tmp/chromedriver-linux64.zip /usr/local/bin/chromedriver-linux64
 
 # Sao chép file requirements.txt và cài đặt các thư viện Python
 COPY requirements.txt .
