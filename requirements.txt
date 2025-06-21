@@ -1,3 +1,4 @@
 py-cord
 selenium
 webdriver-manager
+python-dotenv
