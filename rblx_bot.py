@@ -38,6 +38,7 @@ async def on_ready():
 
 # --- CÁC LỆNH GẠCH CHÉO (Không thay đổi logic) ---
 
+# Thay thế hàm start_rblx cũ bằng hàm này
 @bot.slash_command(name="start", description="Mở rblx.earth và liên kết tài khoản Roblox của bạn.")
 async def start_rblx(
     ctx: discord.ApplicationContext,
@@ -45,21 +46,45 @@ async def start_rblx(
 ):
     await ctx.defer()
     try:
+        # === (CẬP NHẬT) THÊM BƯỚC KIỂM TRA VÀ GHI LOG ===
+        # 1. Ghi log để debug: In ra giá trị và kiểu dữ liệu của biến
+        print(f"DEBUG: Lệnh /start nhận được. Username: '{roblox_username}', Kiểu: {type(roblox_username)}")
+
+        # 2. Kiểm tra phòng thủ: Đảm bảo biến là một chuỗi hợp lệ và không rỗng
+        if not roblox_username or not isinstance(roblox_username, str):
+            await ctx.edit(content=f"❌ Lỗi: Tên người dùng Roblox ('{roblox_username}') không hợp lệ. Vui lòng thử lại.")
+            return # Dừng hàm nếu không hợp lệ
+
+        # === KẾT THÚC CẬP NHẬT ===
+
         await ctx.followup.send(f"Đang mở `{WEBSITE_URL}`...")
         driver.get(WEBSITE_URL)
+        
         user_field = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.XPATH, '//input[@placeholder="Enter your ROBLOX username"]'))
         )
+        
         await ctx.followup.send(f"Đang liên kết tài khoản `{roblox_username}`...")
-        user_field.send_keys(roblox_username)
+        
+        # === PHƯƠNG ÁN 2: DÙNG JAVASCRIPT ĐỂ NHẬP LIỆU (ỔN ĐỊNH HƠN) ===
+        # Thay vì dùng send_keys, chúng ta có thể dùng Javascript để điền giá trị trực tiếp.
+        # Cách này thường ổn định hơn và ít gặp lỗi 'invalid argument'.
+        driver.execute_script("arguments[0].value = arguments[1];", user_field, roblox_username)
+        # user_field.send_keys(roblox_username) # Tạm thời vô hiệu hóa dòng này
+
         link_button = driver.find_element(By.XPATH, '//button[contains(text(), "Link Account")]')
         link_button.click()
+        
         WebDriverWait(driver, 15).until(
             EC.presence_of_element_located((By.XPATH, '//a[contains(@class, "sidebar-link") and .//span[text()="Earn"]]'))
         )
+        
         await ctx.edit(content=f"✅ Đã liên kết tài khoản `{roblox_username}` thành công!")
+
     except Exception as e:
-        await ctx.edit(content=f"❌ Lỗi khi khởi động hoặc liên kết tài khoản: `{e}`")
+        # In ra toàn bộ lỗi để dễ dàng chẩn đoán hơn
+        print(f"ERROR in start_rblx: {e}")
+        await ctx.edit(content=f"❌ Đã xảy ra lỗi trong quá trình thực thi: `{e}`")
 
 @bot.slash_command(name="promo", description="Nhập mã khuyến mãi (promocode) trên rblx.earth.")
 async def enter_promo(
