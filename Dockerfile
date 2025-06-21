@@ -1,4 +1,4 @@
-# Sử dụng ảnh nền Python 3.10-slim, một lựa chọn tốt cho production
+# Sử dụng ảnh nền Python 3.10-slim
 FROM python:3.10-slim
 
 # Đặt thư mục làm việc trong container
@@ -6,12 +6,13 @@ WORKDIR /app
 
 # Gộp tất cả các lệnh cài đặt hệ thống vào một layer để tối ưu kích thước
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Các công cụ cần thiết
+    # Các công cụ cần thiết, thêm 'jq' để xử lý JSON
     curl \
     unzip \
     wget \
     gnupg \
-    # Các thư viện hệ thống bạn đã thêm vào, rất tốt!
+    jq \
+    # Các thư viện hệ thống cần thiết cho Chrome
     libglib2.0-0 \
     libnss3 \
     libfontconfig1 \
@@ -28,19 +29,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
-    # Dọn dẹp cache của apt để giữ image nhỏ gọn
+    # Dọn dẹp cache của apt
     && rm -rf /var/lib/apt/lists/*
 
-# === PHẦN TỰ ĐỘNG HÓA TẢI CHROMEDRIVER ===
-# Tự động tìm URL của phiên bản ChromeDriver ổn định mới nhất cho Linux
-RUN LATEST_CHROMEDRIVER_URL=$(wget -q -O - "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | grep -oP '"linux64":\[{"platform":"linux64","url":"\K[^"]+') \
-    # Tải về ChromeDriver từ URL đã tìm thấy
-    && wget -q --continue -P /tmp/ "${LATEST_CHROMEDRIVER_URL}" \
-    # Giải nén và di chuyển vào thư mục PATH
-    && unzip /tmp/chromedriver-linux64.zip -d /usr/local/bin/ \
-    && mv /usr/local/bin/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \
-    # Dọn dẹp các file không cần thiết
-    && rm -rf /tmp/chromedriver-linux64.zip /usr/local/bin/chromedriver-linux64
+# === (SỬA LỖI) TẢI CHROMEDRIVER BẰNG PHƯƠNG PHÁP MỚI, ỔN ĐỊNH HƠN ===
+RUN \
+    # Lấy phiên bản của Google Chrome đã cài đặt (ví dụ: 126.0.6478.126)
+    CHROME_VERSION=$(google-chrome --product-version) && \
+    # Cắt lấy phần chính của phiên bản (ví dụ: 126.0.6478) để tìm ChromeDriver tương ứng
+    CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d . -f 1-3) && \
+    # Tìm URL của ChromeDriver gần nhất với phiên bản Chrome đã cài
+    CHROMEDRIVER_URL=$(wget -q -O - "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" | jq -r --arg ver "$CHROME_MAJOR_VERSION" '.versions[] | select(.version | startswith($ver)) | .downloads.chromedriver[] | select(.platform=="linux64") | .url' | head -n 1) && \
+    # Tải về, giải nén và di chuyển vào PATH
+    wget -q --continue -P /tmp/ "${CHROMEDRIVER_URL}" && \
+    unzip /tmp/chromedriver-linux64.zip -d /usr/local/bin/ && \
+    mv /usr/local/bin/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver && \
+    # Dọn dẹp
+    rm -rf /tmp/chromedriver-linux64.zip /usr/local/bin/chromedriver-linux64
 
 # Sao chép và cài đặt các thư viện Python
 COPY requirements.txt .
