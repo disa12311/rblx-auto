@@ -4,13 +4,13 @@ FROM selenium/standalone-chrome:latest
 # Đặt người dùng là root để đảm bảo quyền apt-get cho các gói phụ trợ
 USER root
 
-# Cập nhật apt và cài đặt CHỈ các công cụ dòng lệnh phụ trợ
-# KHÔNG CÀI LẠI PYTHON VÀ PIP, VÌ ẢNH NỀN ĐÃ CÓ SẴN!
+# Cập nhật apt và cài đặt các công cụ dòng lệnh phụ trợ VÀ GÓI BUILD ESSENTIALS
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     unzip \
     wget \
     jq \
+    build-essential \
     # Dọn dẹp cache của apt
     && rm -rf /var/lib/apt/lists/*
 
