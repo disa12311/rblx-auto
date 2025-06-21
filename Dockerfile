@@ -4,51 +4,55 @@ FROM python:3.10-slim
 # Đặt thư mục làm việc trong container
 WORKDIR /app
 
-# Gộp tất cả các lệnh cài đặt hệ thống vào một layer để tối ưu kích thước
+# Bước 1: Cập nhật apt và cài đặt các công cụ cơ bản + gói phụ thuộc cần cho Chrome
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Các công cụ cần thiết, thêm 'jq' để xử lý JSON
     curl \
     unzip \
     wget \
     gnupg \
     jq \
-    # Thư viện này cần thiết để tải GPG key theo cách mới
     dirmngr \
-    # Các thư viện hệ thống cần thiết cho Chrome (đã bổ sung từ trước)
+    # Các thư viện hệ thống cần thiết cho Chrome
+    # Đã tinh gọn lại danh sách này, tập trung vào những cái thiết yếu nhất
     libglib2.0-0 \
     libnss3 \
     libfontconfig1 \
-    libgconf-2-4 \
-    libxss1 \
-    libxi6 \
     libatk1.0-0 \
     libatk-bridge2.0-0 \
-    libgtk-3-0 \
     libgdk-pixbuf2.0-0 \
     libgbm-dev \
-    fontconfig-config \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxrandr2 \
+    # Các gói font và tiện ích khác mà Chrome có thể cần
     fonts-liberation \
-    libappindicator1 \
-    libasound2 \
-    libdbus-glib-1-2 \
-    libindicator7 \
     xdg-utils \
-    # Dọn dẹp cache của apt
-    && rm -rf /var/lib/apt/lists/* \
-    \
-    # Thêm kho lưu trữ của Google Chrome bằng cách mới và an toàn hơn
-    # (Đã thay thế apt-key add bằng cách tải key trực tiếp vào thư mục keyrings)
+    # Dọn dẹp cache của apt ngay sau khi cài đặt gói đầu tiên
+    && rm -rf /var/lib/apt/lists/*
+
+# Bước 2: Thêm kho lưu trữ của Google Chrome và cài đặt Chrome
+# Tách ra một lệnh RUN riêng để dễ gỡ lỗi hơn
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Tải GPG key và thêm repo theo cách hiện đại
+    # Đảm bảo mkdir -p được gọi trước khi wget
+    apt-transport-https \
+    ca-certificates \
+    software-properties-common \
     && mkdir -p /etc/apt/keyrings \
     && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | tee /etc/apt/keyrings/google-chrome.gpg > /dev/null \
     && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     \
-    # Cập nhật lại apt và cài đặt Google Chrome Stable
+    # Cập nhật apt và cài đặt Google Chrome Stable
     && apt-get update \
     && apt-get install -y google-chrome-stable \
     # Dọn dẹp cache của apt lần cuối
     && rm -rf /var/lib/apt/lists/*
 
-# === (SỬA LỖI) TẢI CHROMEDRIVER BẰNG PHƯƠNG PHÁP MỚI, ỔN ĐỊNH HƠN ===
+# Bước 3: Tải và cài đặt ChromeDriver
+# Giữ nguyên logic thông minh của bạn để khớp phiên bản
 RUN \
     CHROME_VERSION=$(google-chrome --product-version) && \
     CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d . -f 1-3) && \
