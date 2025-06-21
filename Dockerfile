@@ -14,10 +14,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Dọn dẹp cache của apt
     && rm -rf /var/lib/apt/lists/*
 
-# (Bỏ qua bước update-alternatives cho Python và Pip)
-# Vì chúng ta không cài đặt lại Python, chúng ta không cần cấu hình lại alias.
-# Python mặc định của ảnh nền sẽ được sử dụng.
-
 # Đặt thư mục làm việc trong container
 WORKDIR /app
 
