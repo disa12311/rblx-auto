@@ -12,8 +12,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gnupg \
     jq \
     dirmngr \
-    # Các thư viện hệ thống cần thiết cho Chrome
-    # Đã tinh gọn lại danh sách này, tập trung vào những cái thiết yếu nhất
+    apt-transport-https \
+    ca-certificates \
+    software-properties-common \
+    # CÁC GÓI PHỤ THUỘC MỚI VÀ ĐƯỢC THAY THẾ:
+    # `chromium-browser` thường kéo theo rất nhiều gói phụ thuộc cần thiết cho Chrome/Chromium
+    # Tuy nhiên, chúng ta sẽ không cài chromium-browser mà chỉ lấy các dependencies của nó.
+    # Đây là danh sách tổng hợp từ nhiều nguồn đáng tin cậy cho headless Chrome trong Docker.
     libglib2.0-0 \
     libnss3 \
     libfontconfig1 \
@@ -30,17 +35,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Các gói font và tiện ích khác mà Chrome có thể cần
     fonts-liberation \
     xdg-utils \
+    # Bổ sung các gói thường cần cho hiển thị và xử lý hình ảnh/GUI ảo
+    libu2f-udev \
+    libvulkan1 \
+    libpng16-16 \
+    libjpeg-turbo8 \
+    # Gói hỗ trợ GUI ảo, thường cần khi chạy headless Chrome
+    xvfb \
     # Dọn dẹp cache của apt ngay sau khi cài đặt gói đầu tiên
     && rm -rf /var/lib/apt/lists/*
 
 # Bước 2: Thêm kho lưu trữ của Google Chrome và cài đặt Chrome
 # Tách ra một lệnh RUN riêng để dễ gỡ lỗi hơn
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update \
     # Tải GPG key và thêm repo theo cách hiện đại
-    # Đảm bảo mkdir -p được gọi trước khi wget
-    apt-transport-https \
-    ca-certificates \
-    software-properties-common \
     && mkdir -p /etc/apt/keyrings \
     && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | tee /etc/apt/keyrings/google-chrome.gpg > /dev/null \
     && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
