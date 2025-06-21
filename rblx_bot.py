@@ -20,17 +20,27 @@ def get_chrome_options():
     options.add_argument("--headless")              # Chạy không giao diện
     options.add_argument("--no-sandbox")            # Cần thiết cho môi trường container
     options.add_argument("--disable-dev-shm-usage") # Tránh lỗi tài nguyên
-    options.add_argument("--disable-gpu")           # Tắt GPU
+    options.add_argument("--disable-gpu")           # Tắt GPU (quan trọng cho headless)
     options.add_argument("window-size=1920,1080")   # Giả lập kích thước màn hình
+    
     # Thêm một số args khác thường giúp ổn định trên Linux/Docker
     options.add_argument("--disable-extensions")
-    options.add_argument("--log-level=3") # Chỉ hiển thị lỗi nghiêm trọng từ Chrome/WebDriver
-    options.add_argument("--disable-logging") # Tắt logging của Chrome
+    options.add_argument("--log-level=3")           # Chỉ hiển thị lỗi nghiêm trọng từ Chrome/WebDriver
+    options.add_argument("--disable-logging")       # Tắt logging của Chrome
+    
+    # CÁC TÙY CHỌN BỔ SUNG ĐỂ TĂNG ỔN ĐỊNH TRONG CONTAINER
+    options.add_argument("--disable-features=NetworkService") # Thường giúp ổn định hơn
+    options.add_argument("--no-zygote")             # Quan trọng cho môi trường container không có zygote process
+    # options.add_argument("--single-process")      # Thử nếu vẫn lỗi, nhưng có thể ảnh hưởng hiệu suất
+    # options.add_argument("--remote-debugging-port=9222") # Hữu ích cho debug nếu có thể truy cập
+
+    # Tùy chọn để tránh lỗi liên quan đến font/charset trên một số hệ thống
+    options.add_argument('--lang=en-US')
+    
     return options
 
 # --- KHỞI TẠO BOT DISCORD ---
 intents = discord.Intents.default()
-# intents.message_content = True # Bật nếu bot cần đọc nội dung tin nhắn không phải slash command
 bot = commands.Bot(intents=intents)
 
 @bot.event
@@ -57,10 +67,11 @@ async def start_rblx(
 
         await ctx.followup.send("⏳ Đang khởi tạo trình duyệt và tải trang...")
 
-        # KHÔNG CẦN webdriver_manager.chromedriver.install() nữa!
-        # Vì Dockerfile đã tự động tải và đặt ChromeDriver vào PATH.
-        # Selenium sẽ tự tìm thấy nó.
-        driver = webdriver.Chrome(options=get_chrome_options())
+        # Khởi tạo Selenium WebDriver
+        # Không cần executable_path vì ChromeDriver đã nằm trong PATH từ ảnh nền Docker
+        service = Service() # Khởi tạo một Service instance trống rỗng
+        driver = webdriver.Chrome(service=service, options=get_chrome_options())
+        print("DEBUG: Đã khởi tạo WebDriver Chrome.")
 
         driver.get(WEBSITE_URL)
         print(f"DEBUG: Đã tải URL: {WEBSITE_URL}")
@@ -82,6 +93,7 @@ async def start_rblx(
         
         await ctx.followup.send("⌛ Đã gửi yêu cầu liên kết. Đang đợi trang chính tải...")
 
+        # Chờ một phần tử đặc trưng trên trang chính để xác nhận tải thành công
         WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.XPATH, '//a[contains(@class, "sidebar-link") and .//span[text()="Earn"]]'))
         )
@@ -91,6 +103,21 @@ async def start_rblx(
 
     except Exception as e:
         print(f"❌ Lỗi trong lệnh /start: {e}")
+        # Log thêm thông tin từ driver nếu có thể trước khi đóng
+        if driver:
+            try:
+                print(f"DEBUG: Page source on error:\n{driver.page_source[:500]}...")
+            except Exception as ps_e:
+                print(f"DEBUG: Could not get page source: {ps_e}")
+            try:
+                browser_logs = driver.get_log('browser')
+                if browser_logs:
+                    print("DEBUG: Browser Console Logs:")
+                    for entry in browser_logs:
+                        print(f"  [{entry['level']}] {entry['message']}")
+            except Exception as bl_e:
+                print(f"DEBUG: Could not get browser logs: {bl_e}")
+        
         await ctx.edit(content=f"❌ Đã xảy ra lỗi khi thực thi lệnh /start: `{e}`")
     finally:
         if driver:
@@ -109,11 +136,14 @@ async def enter_promo(
 
         await ctx.followup.send("⏳ Đang khởi tạo trình duyệt và tải trang Promocodes...")
         
-        driver = webdriver.Chrome(options=get_chrome_options())
+        service = Service()
+        driver = webdriver.Chrome(service=service, options=get_chrome_options())
+        print("DEBUG: Đã khởi tạo WebDriver Chrome cho lệnh /promo.")
+
         driver.get(WEBSITE_URL) # Tải lại trang web chính trước
         print(f"DEBUG: Đã tải URL chính: {WEBSITE_URL}")
 
-        # Đợi trang tải xong trước khi điều hướng tới promocodes
+        # Đợi trang tải xong trước khi điều hướng tới promocodes (chờ ô username xuất hiện)
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.XPATH, '//input[@placeholder="Enter your ROBLOX username"]'))
         )
@@ -159,6 +189,20 @@ async def enter_promo(
 
     except Exception as e:
         print(f"❌ Lỗi trong lệnh /promo: {e}")
+        # Log thêm thông tin từ driver nếu có thể trước khi đóng
+        if driver:
+            try:
+                print(f"DEBUG: Page source on error:\n{driver.page_source[:500]}...")
+            except Exception as ps_e:
+                print(f"DEBUG: Could not get page source: {ps_e}")
+            try:
+                browser_logs = driver.get_log('browser')
+                if browser_logs:
+                    print("DEBUG: Browser Console Logs:")
+                    for entry in browser_logs:
+                        print(f"  [{entry['level']}] {entry['message']}")
+            except Exception as bl_e:
+                print(f"DEBUG: Could not get browser logs: {bl_e}")
         await ctx.edit(content=f"❌ Đã xảy ra lỗi khi nhập mã khuyến mãi: `{e}`")
     finally:
         if driver:
