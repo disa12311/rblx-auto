@@ -1,17 +1,18 @@
-# Sử dụng ảnh nền Python chính thức và nhẹ nhàng
+# Sử dụng ảnh nền Python 3.10-slim
 FROM python:3.10-slim
 
 # Đặt thư mục làm việc trong container
 WORKDIR /app
 
-# Cài đặt các gói hệ thống cần thiết cho Chrome và các công cụ khác
-# Gộp các lệnh để tối ưu layer và cài đặt các thư viện cần cho Chrome
+# Gộp tất cả các lệnh cài đặt hệ thống vào một layer để tối ưu kích thước
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Các công cụ cần thiết, thêm 'jq' để xử lý JSON
     curl \
     unzip \
     wget \
     gnupg \
-    # Thư viện cần thiết cho Chrome/Chromium để chạy headless
+    jq \
+    # Các thư viện hệ thống cần thiết cho Chrome
     libglib2.0-0 \
     libnss3 \
     libfontconfig1 \
@@ -23,26 +24,35 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgtk-3-0 \
     libgdk-pixbuf2.0-0 \
     libgbm-dev \
-    # Dọn dẹp để giữ kích thước image nhỏ
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Tải và cài đặt Google Chrome (phiên bản ổn định)
-# Sử dụng URL GPG key đúng và thêm repo của Google Chrome
-RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    # Thêm kho lưu trữ của Google và cài đặt Chrome
+    && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
     && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
-    # Dọn dẹp sau khi cài đặt
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    # Dọn dẹp cache của apt
+    && rm -rf /var/lib/apt/lists/*
 
-# Sao chép file requirements.txt và cài đặt các thư viện Python
-# Đặt bước này trước COPY . . để tận dụng Docker layer cache
+# === (SỬA LỖI) TẢI CHROMEDRIVER BẰNG PHƯƠNG PHÁP MỚI, ỔN ĐỊNH HƠN ===
+RUN \
+    # Lấy phiên bản của Google Chrome đã cài đặt (ví dụ: 126.0.6478.126)
+    CHROME_VERSION=$(google-chrome --product-version) && \
+    # Cắt lấy phần chính của phiên bản (ví dụ: 126.0.6478) để tìm ChromeDriver tương ứng
+    CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d . -f 1-3) && \
+    # Tìm URL của ChromeDriver gần nhất với phiên bản Chrome đã cài
+    CHROMEDRIVER_URL=$(wget -q -O - "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" | jq -r --arg ver "$CHROME_MAJOR_VERSION" '.versions[] | select(.version | startswith($ver)) | .downloads.chromedriver[] | select(.platform=="linux64") | .url' | head -n 1) && \
+    # Tải về, giải nén và di chuyển vào PATH
+    wget -q --continue -P /tmp/ "${CHROMEDRIVER_URL}" && \
+    unzip /tmp/chromedriver-linux64.zip -d /usr/local/bin/ && \
+    mv /usr/local/bin/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver && \
+    # Dọn dẹp
+    rm -rf /tmp/chromedriver-linux64.zip /usr/local/bin/chromedriver-linux64
+
+# Sao chép và cài đặt các thư viện Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Sao chép toàn bộ mã nguồn của bot vào thư mục làm việc
+# Sao chép mã nguồn của bot vào
 COPY . .
 
-# Lệnh để chạy bot khi container khởi động
-# Đảm bảo rblx_bot.py có thể thực thi (nếu cần)
+# Lệnh để chạy bot
 CMD ["python", "rblx_bot.py"]
