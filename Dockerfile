@@ -1,18 +1,12 @@
 # Sử dụng ảnh nền selenium/standalone-chrome đã được cấu hình sẵn Chrome và ChromeDriver
 FROM selenium/standalone-chrome:latest
 
-# Đặt người dùng là root để đảm bảo quyền apt-get
+# Đặt người dùng là root để đảm bảo quyền apt-get cho các gói phụ trợ
 USER root
 
-# Cập nhật apt và cài đặt các công cụ cơ bản + Python nếu cần
-# Ảnh selenium/standalone-chrome thường đã có sẵn Python,
-# nên chúng ta chỉ cài các gói công cụ và đảm bảo python3.10 có sẵn nếu không phải mặc định.
-# Nếu python3.10 đã có sẵn, lệnh này sẽ không cài đặt lại.
+# Cập nhật apt và cài đặt CHỈ các công cụ dòng lệnh phụ trợ
+# KHÔNG CÀI LẠI PYTHON VÀ PIP, VÌ ẢNH NỀN ĐÃ CÓ SẴN!
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.10 \
-    python3.10-distutils \
-    python3-pip \
-    # Các công cụ cần thiết khác nếu bạn vẫn cần chúng
     curl \
     unzip \
     wget \
@@ -20,10 +14,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Dọn dẹp cache của apt
     && rm -rf /var/lib/apt/lists/*
 
-# Đặt alias cho python và pip nếu cần (hoặc sử dụng python3.10/pip3)
-# Chắc chắn rằng chúng ta đang sử dụng đúng phiên bản python3.10
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 100 \
-    && update-alternatives --install /usr/bin/pip pip /usr/usr/bin/pip3 100
+# (Bỏ qua bước update-alternatives cho Python và Pip)
+# Vì chúng ta không cài đặt lại Python, chúng ta không cần cấu hình lại alias.
+# Python mặc định của ảnh nền sẽ được sử dụng.
 
 # Đặt thư mục làm việc trong container
 WORKDIR /app
@@ -34,10 +27,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Sao chép mã nguồn của bot vào
 COPY . .
-
-# Bạn có thể cân nhắc chuyển về người dùng mặc định của ảnh Selenium nếu muốn bảo mật hơn,
-# nhưng thường không cần thiết cho ứng dụng đơn giản này.
-# USER seluser # hoặc bất kỳ user nào được định nghĩa trong ảnh nền
 
 # Lệnh để chạy bot
 # ChromeDriver và Chrome đã được cài đặt và nằm trong PATH từ ảnh nền
