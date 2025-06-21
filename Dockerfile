@@ -6,12 +6,15 @@ WORKDIR /app
 
 # Gộp tất cả các lệnh cài đặt hệ thống vào một layer để tối ưu kích thước
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Các công cụ cần thiết, thêm 'jq' để xử lý JSON
     curl \
     unzip \
     wget \
     gnupg \
     jq \
-    # Các thư viện hệ thống cần thiết cho Chrome (đã bổ sung)
+    # Thư viện này cần thiết để tải GPG key theo cách mới
+    dirmngr \
+    # Các thư viện hệ thống cần thiết cho Chrome (đã bổ sung từ trước)
     libglib2.0-0 \
     libnss3 \
     libfontconfig1 \
@@ -30,12 +33,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libdbus-glib-1-2 \
     libindicator7 \
     xdg-utils \
-    # Thêm kho lưu trữ của Google và cài đặt Chrome
-    && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
+    # Dọn dẹp cache của apt
+    && rm -rf /var/lib/apt/lists/* \
+    \
+    # Thêm kho lưu trữ của Google Chrome bằng cách mới và an toàn hơn
+    # (Đã thay thế apt-key add bằng cách tải key trực tiếp vào thư mục keyrings)
+    && mkdir -p /etc/apt/keyrings \
+    && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | tee /etc/apt/keyrings/google-chrome.gpg > /dev/null \
+    && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    \
+    # Cập nhật lại apt và cài đặt Google Chrome Stable
     && apt-get update \
     && apt-get install -y google-chrome-stable \
-    # Dọn dẹp cache của apt
+    # Dọn dẹp cache của apt lần cuối
     && rm -rf /var/lib/apt/lists/*
 
 # === (SỬA LỖI) TẢI CHROMEDRIVER BẰNG PHƯƠNG PHÁP MỚI, ỔN ĐỊNH HƠN ===
@@ -43,9 +53,14 @@ RUN \
     CHROME_VERSION=$(google-chrome --product-version) && \
     CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d . -f 1-3) && \
     CHROMEDRIVER_URL=$(wget -q -O - "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" | jq -r --arg ver "$CHROME_MAJOR_VERSION" '.versions[] | select(.version | startswith($ver)) | .downloads.chromedriver[] | select(.platform=="linux64") | .url' | head -n 1) && \
+    \
+    # Kiểm tra nếu CHROMEDRIVER_URL rỗng
+    [ -z "$CHROMEDRIVER_URL" ] && echo "ERROR: Could not find ChromeDriver URL for Chrome version $CHROME_MAJOR_VERSION" && exit 1 || true && \
+    \
     wget -q --continue -P /tmp/ "${CHROMEDRIVER_URL}" && \
     unzip /tmp/chromedriver-linux64.zip -d /usr/local/bin/ && \
     mv /usr/local/bin/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver && \
+    chmod +x /usr/local/bin/chromedriver && \
     rm -rf /tmp/chromedriver-linux64.zip /usr/local/bin/chromedriver-linux64
 
 # Sao chép và cài đặt các thư viện Python
