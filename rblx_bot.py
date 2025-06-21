@@ -1,71 +1,63 @@
+# Import các thư viện cần thiết
 import discord
-from discord.commands import Option # Import thêm Option để định nghĩa tham số
+from discord.commands import Option
 from discord.ext import commands
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
+import os  # (CẬP NHẬT) Import thư viện 'os' để đọc biến môi trường
 
 # --- CẤU HÌNH ---
-import os # Import thêm thư viện os
-# Lấy token từ biến môi trường của Railway thay vì ghi thẳng vào code
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN") 
+# (CẬP NHẬT) Lấy token từ biến môi trường của Railway thay vì ghi thẳng vào code.
+# Đây là cách làm bảo mật và đúng chuẩn khi deploy.
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 WEBSITE_URL = "https://rblx.earth/"
 
-# --- KHỞI TẠO SELENIUM (CẬP NHẬT CHO SERVER) ---
+# --- KHỞI TẠO SELENIUM (CẬP NHẬT CHO MÔI TRƯỜNG SERVER/DOCKER) ---
 options = webdriver.ChromeOptions()
-options.add_argument("--headless")  # BẮT BUỘC: Chạy ở chế độ không giao diện
-options.add_argument("--no-sandbox") # BẮT BUỘC: Cần thiết để chạy Chrome trong môi trường container
-options.add_argument("--disable-dev-shm-usage") # BẮT BUỘC: Tránh lỗi tài nguyên
-options.add_argument("--disable-gpu") # Tùy chọn: Vô hiệu hóa GPU
-options.add_argument("window-size=1920,1080") # Tùy chọn: Đặt kích thước cửa sổ ảo
+options.add_argument("--headless")              # BẮT BUỘC: Chạy ở chế độ không giao diện đồ họa
+options.add_argument("--no-sandbox")            # BẮT BUỘC: Cần thiết để chạy Chrome trong môi trường container Docker
+options.add_argument("--disable-dev-shm-usage") # BẮT BUỘC: Tránh lỗi tài nguyên và crash trình duyệt
+options.add_argument("--disable-gpu")           # Tùy chọn: Tắt GPU vì server không có GPU vật lý
+options.add_argument("window-size=1920,1080")   # Tùy chọn: Giả lập kích thước màn hình để tránh layout responsive
 
-# Khi dùng Docker, chúng ta không cần chỉ định đường dẫn tới chromedriver nữa
+# (CẬP NHẬT) Khởi tạo driver. Do Dockerfile đã cài đặt chromedriver vào PATH của hệ thống,
+# Selenium sẽ tự động tìm thấy nó mà không cần chúng ta chỉ định đường dẫn.
 driver = webdriver.Chrome(options=options)
 
 # --- KHỞI TẠO BOT DISCORD ---
 intents = discord.Intents.default()
-bot = commands.Bot(intents=intents) # Bỏ phần command_prefix
+bot = commands.Bot(intents=intents)
 
 @bot.event
 async def on_ready():
     print(f'Bot đã đăng nhập với tên: {bot.user}')
-    print('Sẵn sàng nhận lệnh gạch chéo (/).')
+    print('Sẵn sàng nhận lệnh gạch chéo (/). Bot đang chạy trên server.')
 
-# --- CÁC LỆNH GẠCH CHÉO CỦA BOT ---
+# --- CÁC LỆNH GẠCH CHÉO (Không thay đổi logic) ---
 
 @bot.slash_command(name="start", description="Mở rblx.earth và liên kết tài khoản Roblox của bạn.")
 async def start_rblx(
-    ctx: discord.ApplicationContext, 
+    ctx: discord.ApplicationContext,
     roblox_username: Option(str, "Tên người dùng Roblox của bạn để liên kết.", required=True)
 ):
-    """Lệnh /start: Mở web và liên kết tài khoản."""
-    await ctx.defer() # Báo cho Discord biết bot cần thời gian xử lý
-
+    await ctx.defer()
     try:
-        await ctx.followup.send(f"Đang mở `{WEBSITE_URL}` và tìm ô nhập liệu...")
+        await ctx.followup.send(f"Đang mở `{WEBSITE_URL}`...")
         driver.get(WEBSITE_URL)
-
         user_field = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.XPATH, '//input[@placeholder="Enter your ROBLOX username"]'))
         )
-        await ctx.followup.send(f"Đã tìm thấy ô nhập liệu. Đang liên kết tài khoản `{roblox_username}`...")
+        await ctx.followup.send(f"Đang liên kết tài khoản `{roblox_username}`...")
         user_field.send_keys(roblox_username)
-
         link_button = driver.find_element(By.XPATH, '//button[contains(text(), "Link Account")]')
         link_button.click()
-        
-        await ctx.followup.send("Đã gửi yêu cầu liên kết. Đang đợi trang tải...")
-        
         WebDriverWait(driver, 15).until(
             EC.presence_of_element_located((By.XPATH, '//a[contains(@class, "sidebar-link") and .//span[text()="Earn"]]'))
         )
-        
-        # Sửa tin nhắn đầu tiên thành thông báo thành công
-        await ctx.edit(content=f"✅ Đã liên kết tài khoản `{roblox_username}` thành công và đang ở trang chính!")
-
+        await ctx.edit(content=f"✅ Đã liên kết tài khoản `{roblox_username}` thành công!")
     except Exception as e:
         await ctx.edit(content=f"❌ Lỗi khi khởi động hoặc liên kết tài khoản: `{e}`")
 
@@ -74,47 +66,35 @@ async def enter_promo(
     ctx: discord.ApplicationContext,
     code: Option(str, "Mã khuyến mãi bạn muốn nhập.", required=True)
 ):
-    """Lệnh /promo: Nhập mã khuyến mãi."""
     await ctx.defer()
-        
     try:
         await ctx.followup.send("Đang điều hướng đến trang `Promocodes`...")
         promo_page_link = driver.find_element(By.XPATH, '//a[contains(@href, "/promocodes")]')
         promo_page_link.click()
-
-        await ctx.followup.send(f"Đang nhập mã `{code}`...")
         promo_field = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.XPATH, '//input[@placeholder="Enter a promocode"]'))
         )
         promo_field.send_keys(code)
-        
         redeem_button = driver.find_element(By.XPATH, '//button[contains(text(), "Redeem")]')
         redeem_button.click()
-
-        time.sleep(2)
         result_popup = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, 'swal2-title'))
         )
-        result_message = result_popup.text
-        
-        await ctx.edit(content=f"✅ Kết quả nhập mã: **{result_message}**")
-
+        await ctx.edit(content=f"✅ Kết quả nhập mã `{code}`: **{result_popup.text}**")
     except Exception as e:
         await ctx.edit(content=f"❌ Lỗi khi nhập mã khuyến mãi: `{e}`")
 
-@bot.slash_command(name="stop", description="Đóng trình duyệt web mà bot đang điều khiển.")
+@bot.slash_command(name="stop", description="Đóng trình duyệt web mà bot đang điều khiển (chỉ nên dùng khi debug).")
 async def stop_browser(ctx: discord.ApplicationContext):
-    """Lệnh /stop: Đóng trình duyệt."""
-    await ctx.defer()
-    try:
-        await ctx.followup.send("Đang đóng trình duyệt...")
-        driver.quit()
-        await ctx.edit(content="✅ Đã đóng trình duyệt. Hẹn gặp lại!")
-    except Exception as e:
-        await ctx.edit(content=f"❌ Lỗi khi đóng trình duyệt: `{e}`")
+    await ctx.respond("Trên môi trường server, lệnh này sẽ tắt toàn bộ tiến trình. Hãy deploy lại nếu muốn khởi động lại.")
+    # Lệnh này sẽ khiến container bị crash, Railway sẽ tự khởi động lại.
+    driver.quit()
 
-# --- CHẠY BOT ---
+
+# --- CHẠY BOT (CẬP NHẬT) ---
+# Kiểm tra xem token có được cung cấp không trước khi chạy
 if DISCORD_TOKEN:
     bot.run(DISCORD_TOKEN)
 else:
-    print("Lỗi: Không tìm thấy DISCORD_TOKEN trong biến môi trường.")
+    print("LỖI: Biến môi trường DISCORD_TOKEN chưa được thiết lập.")
+    print("Vui lòng thêm token vào tab 'Variables' trên Railway.")
