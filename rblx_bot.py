@@ -13,7 +13,7 @@ import os  # (CẬP NHẬT) Import thư viện 'os' để đọc biến môi tr�
 # (CẬP NHẬT) Lấy token từ biến môi trường của Railway thay vì ghi thẳng vào code.
 # Đây là cách làm bảo mật và đúng chuẩn khi deploy.
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-WEBSITE_URL = "https://rblx.earth/"
+WEBSITE_URL = "rblx.earth/?referredBy=8404348847"
 
 # --- KHỞI TẠO SELENIUM (CẬP NHẬT CHO MÔI TRƯỜNG SERVER/DOCKER) ---
 options = webdriver.ChromeOptions()
