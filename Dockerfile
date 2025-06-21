@@ -1,81 +1,27 @@
-# Sử dụng ảnh nền Python 3.10-slim
-FROM python:3.10-slim
+# Sử dụng ảnh nền selenium/standalone-chrome đã được cấu hình sẵn Chrome và ChromeDriver
+FROM selenium/standalone-chrome:latest
+
+# Cài đặt Python 3.10 (nếu chưa có hoặc cần phiên bản cụ thể)
+# Ảnh selenium/standalone-chrome thường dựa trên Debian, nên có thể cài Python bằng apt
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3.10-distutils \
+    python3-pip \
+    # Các công cụ cần thiết khác nếu bạn vẫn cần chúng
+    curl \
+    unzip \
+    wget \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# Đặt alias cho python và pip nếu cần (hoặc sử dụng python3.10/pip3)
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.10 1 \
+    && update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
 
 # Đặt thư mục làm việc trong container
 WORKDIR /app
 
-# Bước 1: Cập nhật apt và cài đặt các công cụ cơ bản + gói phụ thuộc cần cho Chrome
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    unzip \
-    wget \
-    gnupg \
-    jq \
-    dirmngr \
-    apt-transport-https \
-    ca-certificates \
-    software-properties-common \
-    # CÁC GÓI PHỤ THUỘC MỚI VÀ ĐƯỢC THAY THẾ:
-    # `chromium-browser` thường kéo theo rất nhiều gói phụ thuộc cần thiết cho Chrome/Chromium
-    # Tuy nhiên, chúng ta sẽ không cài chromium-browser mà chỉ lấy các dependencies của nó.
-    # Đây là danh sách tổng hợp từ nhiều nguồn đáng tin cậy cho headless Chrome trong Docker.
-    libglib2.0-0 \
-    libnss3 \
-    libfontconfig1 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libgdk-pixbuf2.0-0 \
-    libgbm-dev \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxrandr2 \
-    # Các gói font và tiện ích khác mà Chrome có thể cần
-    fonts-liberation \
-    xdg-utils \
-    # Bổ sung các gói thường cần cho hiển thị và xử lý hình ảnh/GUI ảo
-    libu2f-udev \
-    libvulkan1 \
-    libpng16-16 \
-    libjpeg-turbo8 \
-    # Gói hỗ trợ GUI ảo, thường cần khi chạy headless Chrome
-    xvfb \
-    # Dọn dẹp cache của apt ngay sau khi cài đặt gói đầu tiên
-    && rm -rf /var/lib/apt/lists/*
-
-# Bước 2: Thêm kho lưu trữ của Google Chrome và cài đặt Chrome
-# Tách ra một lệnh RUN riêng để dễ gỡ lỗi hơn
-RUN apt-get update \
-    # Tải GPG key và thêm repo theo cách hiện đại
-    && mkdir -p /etc/apt/keyrings \
-    && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor | tee /etc/apt/keyrings/google-chrome.gpg > /dev/null \
-    && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
-    \
-    # Cập nhật apt và cài đặt Google Chrome Stable
-    && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    # Dọn dẹp cache của apt lần cuối
-    && rm -rf /var/lib/apt/lists/*
-
-# Bước 3: Tải và cài đặt ChromeDriver
-# Giữ nguyên logic thông minh của bạn để khớp phiên bản
-RUN \
-    CHROME_VERSION=$(google-chrome --product-version) && \
-    CHROME_MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d . -f 1-3) && \
-    CHROMEDRIVER_URL=$(wget -q -O - "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" | jq -r --arg ver "$CHROME_MAJOR_VERSION" '.versions[] | select(.version | startswith($ver)) | .downloads.chromedriver[] | select(.platform=="linux64") | .url' | head -n 1) && \
-    \
-    # Kiểm tra nếu CHROMEDRIVER_URL rỗng
-    [ -z "$CHROMEDRIVER_URL" ] && echo "ERROR: Could not find ChromeDriver URL for Chrome version $CHROME_MAJOR_VERSION" && exit 1 || true && \
-    \
-    wget -q --continue -P /tmp/ "${CHROMEDRIVER_URL}" && \
-    unzip /tmp/chromedriver-linux64.zip -d /usr/local/bin/ && \
-    mv /usr/local/bin/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver && \
-    chmod +x /usr/local/bin/chromedriver && \
-    rm -rf /tmp/chromedriver-linux64.zip /usr/local/bin/chromedriver-linux64
-
-# Sao chép và cài đặt các thư viện Python
+# Sao chép file requirements.txt và cài đặt các thư viện Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -83,4 +29,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Lệnh để chạy bot
+# ChromeDriver và Chrome đã được cài đặt và nằm trong PATH từ ảnh nền
 CMD ["python", "rblx_bot.py"]
