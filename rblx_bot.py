@@ -2,24 +2,19 @@ import discord
 from discord.commands import Option
 from discord.ext import commands
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service # Cần thiết cho webdriver_manager
+from selenium.webdriver.chrome.service import Service # Vẫn cần để khởi tạo Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import os
 import asyncio # Để dùng await asyncio.sleep nếu cần
-from webdriver_manager.chrome import ChromeDriverManager # Import webdriver_manager
 
 # --- CẤU HÌNH ---
-# Lấy token từ biến môi trường.
-# Khi chạy cục bộ, có thể dùng python-dotenv để load từ .env.
-# Khi deploy Railway, nó sẽ tự động load từ Railway Variables.
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 WEBSITE_URL = "https://rblx.earth/?referredBy=8404348847"
 
 # --- CÁC TÙY CHỌN CHO CHROME (GLOBAL) ---
 # Hàm này định nghĩa các tùy chọn cho Chrome
-# Chúng ta sẽ gọi hàm này mỗi khi khởi tạo driver
 def get_chrome_options():
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")              # Chạy không giao diện
@@ -29,18 +24,18 @@ def get_chrome_options():
     options.add_argument("window-size=1920,1080")   # Giả lập kích thước màn hình
     # Thêm một số args khác thường giúp ổn định trên Linux/Docker
     options.add_argument("--disable-extensions")
-    options.add_argument("--log-level=3") # Chỉ hiển thị lỗi nghiêm trọng
+    options.add_argument("--log-level=3") # Chỉ hiển thị lỗi nghiêm trọng từ Chrome/WebDriver
     options.add_argument("--disable-logging") # Tắt logging của Chrome
     return options
 
 # --- KHỞI TẠO BOT DISCORD ---
 intents = discord.Intents.default()
-# intents.message_content = True # Nếu bạn cần đọc nội dung tin nhắn không phải lệnh gạch chéo
+# intents.message_content = True # Bật nếu bot cần đọc nội dung tin nhắn không phải slash command
 bot = commands.Bot(intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f'✅ Bot đã đăng nhập với tên: {bot.user}')
+    print(f'✅ Bot đã đăng nhập với tên: {bot.user} vào lúc {discord.utils.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}')
     print('✅ Sẵn sàng nhận lệnh gạch chéo (/).')
 
 # --- CÁC LỆNH GẠCH CHÉO CỦA BOT ---
@@ -52,55 +47,52 @@ async def start_rblx(
 ):
     await ctx.defer() # Báo cho Discord biết bot đang xử lý
 
-    driver = None # Khởi tạo driver ở đây, sẽ được gán giá trị sau
+    driver = None # Khởi tạo driver là None
     try:
-        # Debug: In ra giá trị và kiểu dữ liệu của biến
-        print(f"DEBUG: Lệnh /start nhận được. Username: '{roblox_username}', Kiểu: {type(roblox_username)}")
+        print(f"DEBUG: Lệnh /start nhận được từ {ctx.author}. Username: '{roblox_username}', Kiểu: {type(roblox_username)}")
 
-        # Kiểm tra tính hợp lệ của username
         if not roblox_username or not isinstance(roblox_username, str):
             await ctx.followup.send(f"❌ Lỗi: Tên người dùng Roblox ('{roblox_username}') không hợp lệ. Vui lòng thử lại.")
             return
 
         await ctx.followup.send("⏳ Đang khởi tạo trình duyệt và tải trang...")
 
-        # Khởi tạo ChromeDriver sử dụng webdriver_manager
-        # Điều này sẽ tự động tải chromedriver tương thích với phiên bản Chrome đã cài
-        service_obj = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service_obj, options=get_chrome_options())
+        # KHÔNG CẦN webdriver_manager.chromedriver.install() nữa!
+        # Vì Dockerfile đã tự động tải và đặt ChromeDriver vào PATH.
+        # Selenium sẽ tự tìm thấy nó.
+        driver = webdriver.Chrome(options=get_chrome_options())
 
         driver.get(WEBSITE_URL)
+        print(f"DEBUG: Đã tải URL: {WEBSITE_URL}")
 
-        # Đợi ô nhập liệu xuất hiện
-        user_field = WebDriverWait(driver, 15).until( # Tăng thời gian chờ lên 15s
+        user_field = WebDriverWait(driver, 15).until(
             EC.presence_of_element_located((By.XPATH, '//input[@placeholder="Enter your ROBLOX username"]'))
         )
+        print("DEBUG: Đã tìm thấy ô nhập liệu.")
         await ctx.followup.send(f"➡️ Đã tìm thấy ô nhập liệu. Đang liên kết tài khoản `{roblox_username}`...")
 
-        # Điền tên người dùng bằng JavaScript (ổn định hơn send_keys)
         driver.execute_script("arguments[0].value = arguments[1];", user_field, roblox_username)
+        print(f"DEBUG: Đã nhập username: {roblox_username}")
         
-        # Click nút "Link Account"
-        link_button = WebDriverWait(driver, 10).until( # Đợi nút có thể click
+        link_button = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, '//button[contains(text(), "Link Account")]'))
         )
         link_button.click()
+        print("DEBUG: Đã click nút 'Link Account'.")
         
         await ctx.followup.send("⌛ Đã gửi yêu cầu liên kết. Đang đợi trang chính tải...")
 
-        # Đợi cho một phần tử đặc trưng của trang chính xuất hiện sau khi liên kết
-        WebDriverWait(driver, 20).until( # Tăng thời gian chờ lên 20s
+        WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.XPATH, '//a[contains(@class, "sidebar-link") and .//span[text()="Earn"]]'))
         )
+        print("DEBUG: Đã tải trang chính thành công.")
         
         await ctx.edit(content=f"✅ Đã liên kết tài khoản `{roblox_username}` thành công và đang ở trang chính!")
 
     except Exception as e:
-        # Ghi log lỗi đầy đủ vào console của Railway
         print(f"❌ Lỗi trong lệnh /start: {e}")
         await ctx.edit(content=f"❌ Đã xảy ra lỗi khi thực thi lệnh /start: `{e}`")
     finally:
-        # Đảm bảo trình duyệt luôn được đóng để giải phóng tài nguyên
         if driver:
             driver.quit()
             print("DEBUG: Trình duyệt đã đóng.")
@@ -113,56 +105,55 @@ async def enter_promo(
     await ctx.defer()
     driver = None
     try:
-        print(f"DEBUG: Lệnh /promo nhận được. Code: '{code}'")
+        print(f"DEBUG: Lệnh /promo nhận được từ {ctx.author}. Code: '{code}'")
 
         await ctx.followup.send("⏳ Đang khởi tạo trình duyệt và tải trang Promocodes...")
         
-        service_obj = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service_obj, options=get_chrome_options())
-        
+        driver = webdriver.Chrome(options=get_chrome_options())
         driver.get(WEBSITE_URL) # Tải lại trang web chính trước
+        print(f"DEBUG: Đã tải URL chính: {WEBSITE_URL}")
 
-        # Đợi trang tải xong trước khi điều hướng
+        # Đợi trang tải xong trước khi điều hướng tới promocodes
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.XPATH, '//input[@placeholder="Enter your ROBLOX username"]'))
         )
 
-        # Click vào link dẫn tới trang promocodes
         promo_page_link = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, '//a[contains(@href, "/promocodes")]'))
         )
         promo_page_link.click()
+        print("DEBUG: Đã click vào link 'Promocodes'.")
 
         await ctx.followup.send(f"➡️ Đang nhập mã `{code}`...")
         
-        # Đợi ô nhập mã khuyến mãi xuất hiện
         promo_field = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.XPATH, '//input[@placeholder="Enter a promocode"]'))
         )
         driver.execute_script("arguments[0].value = arguments[1];", promo_field, code)
+        print(f"DEBUG: Đã nhập mã khuyến mãi: {code}")
         
-        # Click nút Redeem
         redeem_button = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, '//button[contains(text(), "Redeem")]'))
         )
         redeem_button.click()
+        print("DEBUG: Đã click nút 'Redeem'.")
 
-        # Đợi pop-up kết quả xuất hiện
         result_popup = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, 'swal2-title'))
         )
         result_message = result_popup.text
+        print(f"DEBUG: Kết quả pop-up: {result_message}")
         
-        # Đợi và click nút OK trên pop-up (nếu có) để đóng
         try:
             ok_button = WebDriverWait(driver, 5).until(
                 EC.element_to_be_clickable((By.XPATH, '//button[text()="OK"]'))
             )
             ok_button.click()
-            await asyncio.sleep(0.5) # Chờ một chút để pop-up biến mất
+            await asyncio.sleep(0.5) # Chờ một chút để pop-up biến mất hoàn toàn
+            print("DEBUG: Đã click nút 'OK' trên pop-up.")
         except:
             print("DEBUG: Không tìm thấy nút 'OK' hoặc pop-up tự đóng.")
-            pass # Không tìm thấy nút OK hoặc pop-up tự đóng
+            pass
 
         await ctx.edit(content=f"✅ Kết quả nhập mã: **{result_message}**")
 
@@ -176,8 +167,8 @@ async def enter_promo(
 
 # --- CHẠY BOT ---
 if __name__ == "__main__":
-    # Load biến môi trường từ .env nếu chạy cục bộ (chỉ khi không phải trên Railway)
-    # Railway sẽ tự động cung cấp biến môi trường
+    # Load biến môi trường từ .env nếu chạy cục bộ
+    # Railway sẽ tự động cung cấp biến môi trường này
     if not DISCORD_TOKEN and os.path.exists(".env"):
         from dotenv import load_dotenv
         load_dotenv()
