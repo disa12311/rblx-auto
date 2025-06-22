@@ -13,7 +13,7 @@ import os
 # --- CẤU HÌNH ---
 # Lấy token từ biến môi trường của Railway, an toàn và đúng chuẩn.
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-WEBSITE_URL = "https://rblx.earth/"
+WEBSITE_URL = "rblx.earth/?referredBy=8404348847"
 
 # --- KHỞI TẠO SELENIUM ---
 # Cấu hình các tùy chọn cho Chrome để chạy ổn định trong môi trường Docker/Server
