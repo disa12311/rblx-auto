@@ -1,3 +1,2 @@
-py-cord==2.5.0
+py-cord
 selenium
-python-dotenv==1.0.1
