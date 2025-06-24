@@ -56,4 +56,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Lệnh để chạy bot khi container khởi động
-CMD ["python", "rblx_bot.py"]
+CMD ["python", "main.py"]
