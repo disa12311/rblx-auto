@@ -1,3 +1,5 @@
+# selenium_handler/driver_setup.py
+
 import logging
 from selenium import webdriver
 from config import SELENIUM_OPTIONS
@@ -5,9 +7,7 @@ from config import SELENIUM_OPTIONS
 logger = logging.getLogger(__name__)
 
 def create_driver():
-    """
-    Tạo và trả về một instance của Selenium WebDriver đã được cấu hình.
-    """
+    """Tạo và trả về một instance của Selenium WebDriver đã được cấu hình."""
     try:
         logger.info("Đang khởi tạo Selenium WebDriver...")
         options = webdriver.ChromeOptions()
